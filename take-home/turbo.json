@@ -1,0 +1,77 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "format": {
+      "outputs": [".cache/.prettiercache"],
+      "outputLogs": "new-only"
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": [".cache/tsbuildinfo.json"]
+    },
+    "clean": {
+      "cache": false
+    },
+    "push": {
+      "cache": false,
+      "interactive": true
+    },
+    "studio": {
+      "cache": false,
+      "persistent": true
+    },
+    "ui-add": {
+      "cache": false,
+      "interactive": true
+    },
+    "tsc": {
+      "dependsOn": ["^tsc"]
+    },
+    "dev-notifications": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev": {
+      "dependsOn": ["^db:generate"],
+      "cache": false,
+      "persistent": true
+    },
+    "watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^db:generate", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@repo/contracts#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "api#build": {
+      "cache": false,
+      "dependsOn": ["^db:generate", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "seed": {
+      "dependsOn": ["^seed"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "env": ["SKIP_ENV_VALIDATION"]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate-deployed": {
+      "cache": false,
+      "dependsOn": ["^db:generate", "@types#build"],
+      "env": ["DATABASE_URL"]
+    },
+    "web#build": {
+      "dependsOn": ["^db:generate", "^build"],
+      "outputs": [".next/**"]
+    }
+  }
+}
