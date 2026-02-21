@@ -1,14 +1,18 @@
 import 'reflect-metadata';
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import { initServer } from '@ts-rest/fastify';
 import { contract } from '@repo/contracts';
 import { prisma } from '@repo/db';
 import { env } from './env';
 import { container } from './container';
-import { UserController } from './controllers/user.controller';
+import { OrderController } from './controllers/order.controller';
 import { PRISMA_TOKEN } from './lib/prisma';
 import { registerErrorHandler } from './lib/error-handler';
 import { registerRequestLogger } from './lib/request-logger';
+
+container.register(PRISMA_TOKEN, { useValue: prisma });
+
 const app = Fastify({
   logger: {
     level: env.NODE_ENV === 'development' ? 'debug' : 'info',
@@ -31,29 +35,47 @@ const app = Fastify({
 
 const s = initServer();
 
-function withTransaction(
-  ControllerClass: typeof UserController,
-  handler: (controller: UserController) => (req: { userId?: string }) => Promise<{ status: number; body: unknown }>
+await app.register(cors, { origin: true });
+registerRequestLogger(app);
+registerErrorHandler(app);
+
+function withOrderTransaction(
+  ControllerClass: typeof OrderController,
+  handler: (controller: OrderController) => (body: unknown) => Promise<{ status: number; body: unknown }>
 ) {
-  return async (input: unknown, ...args: unknown[]) => {
-    const request = input as { request?: { userId?: string } };
-    const userId = request.request?.userId;
+  return async (input: unknown) => {
+    const request = input as { body?: unknown };
     return await prisma.$transaction(async (tx: unknown) => {
       const requestContainer = container.createChildContainer();
       requestContainer.register(PRISMA_TOKEN, { useValue: tx });
-      const controller = requestContainer.resolve(ControllerClass) as UserController;
-      return handler(controller)({ userId });
+      const controller = requestContainer.resolve(ControllerClass) as OrderController;
+      return handler(controller)(request.body ?? {});
     });
   };
 }
 
-registerRequestLogger(app);
-registerErrorHandler(app);
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const router = s.router(contract, {
-  getUsers: withTransaction(UserController, (c) => c.getUsers) as any,
-  getCurrentUser: withTransaction(UserController, (c) => c.getCurrentUser) as any,
+  getCustomers: async () => {
+    const customers = await prisma.customer.findMany({
+      select: { id: true, name: true, email: true },
+    });
+    return { status: 200, body: customers };
+  },
+  getProducts: async () => {
+    const products = await prisma.product.findMany({
+      select: { id: true, name: true, price: true },
+    });
+    return {
+      status: 200,
+      body: products.map((p) => ({ id: p.id, name: p.name, price: (p.price / 100).toFixed(2) })),
+    };
+  },
+  getOrders: async () => {
+    const controller = container.resolve(OrderController);
+    return controller.getOrders();
+  },
+  createOrder: withOrderTransaction(OrderController, (c) => c.createOrder) as any,
 });
 
 const start = async () => {

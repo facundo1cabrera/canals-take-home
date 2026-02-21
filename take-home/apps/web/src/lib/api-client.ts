@@ -10,7 +10,8 @@ export const apiClient = initQueryClient(contract, {
     'Content-Type': 'application/json',
   },
   api: async (args) => {
-    const url = `${env.NEXT_PUBLIC_API_URL}${args.path}`;
+    const url = `${args.path}`;
+    console.log('url', url);
     const response = await fetch(url, {
       method: args.method,
       headers: args.headers as Record<string, string>,

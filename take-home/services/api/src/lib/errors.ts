@@ -53,6 +53,12 @@ export class ConflictError extends ApiError {
   }
 }
 
+export class PaymentFailedError extends ApiError {
+  constructor(message: string = 'Payment failed', details?: unknown) {
+    super(message, 402, 'PAYMENT_FAILED', details);
+  }
+}
+
 export class ValidationError extends ApiError {
   constructor(message: string = 'Validation failed', details?: unknown) {
     super(message, 422, 'VALIDATION_ERROR', details);
