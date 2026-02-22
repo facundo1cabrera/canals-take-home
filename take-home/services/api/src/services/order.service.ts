@@ -72,6 +72,8 @@ export class OrderService {
 
     const warehouses = await this.orderRepository.findWarehousesWithInventoryForItems(items);
 
+    console.log('warehouses', warehouses);
+
     if (warehouses.length === 0) {
       throw new BadRequestError('No warehouse has sufficient inventory for all items');
     }
@@ -98,7 +100,7 @@ export class OrderService {
     let totalAmountCents = 0;
 
     const orderItems: { productId: string; quantity: number; unitPrice: number }[] = [];
-    
+
     for (const item of items) {
       const product = productMap.get(item.productId)!;
       const unitPriceCents = product.price;

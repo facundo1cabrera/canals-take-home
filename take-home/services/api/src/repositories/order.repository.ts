@@ -50,60 +50,38 @@ export class OrderRepository {
   async findWarehousesWithInventoryForItems(
     items: { productId: string; quantity: number }[]
   ): Promise<WarehouseWithCoords[]> {
-    const productIds = [...new Set(items.map((i) => i.productId))];
-    if (productIds.length === 0) return [];
+    if (items.length === 0) return [];
 
-    const inventory = await this.db
-      .selectFrom('inventory')
-      .innerJoin('warehouses', 'warehouses.id', 'inventory.warehouseId')
-      .select([
-        'inventory.warehouseId',
-        'inventory.productId',
-        'inventory.quantity',
-        'warehouses.id as warehouseId',
-        'warehouses.latitude',
-        'warehouses.longitude',
-      ])
-      .where('inventory.productId', 'in', productIds)
-      .execute();
+    let query = this.db
+      .selectFrom('warehouses')
+      .select(['warehouses.id', 'warehouses.latitude', 'warehouses.longitude']);
 
-    const byWarehouse = new Map<string, Map<string, number>>();
-    const warehouseCoords = new Map<string, { latitude: number; longitude: number }>();
-    for (const inv of inventory) {
-      if (!byWarehouse.has(inv.warehouseId)) {
-        byWarehouse.set(inv.warehouseId, new Map());
-        warehouseCoords.set(inv.warehouseId, {
-          latitude: inv.latitude,
-          longitude: inv.longitude,
-        });
-      }
-      byWarehouse.get(inv.warehouseId)!.set(inv.productId, inv.quantity);
+    for (const item of items) {
+      query = query.where(({ exists, selectFrom }) =>
+        exists(
+          selectFrom('inventory')
+            .whereRef('inventory.warehouseId', '=', 'warehouses.id')
+            .where('inventory.productId', '=', item.productId)
+            .where('inventory.quantity', '>=', item.quantity)
+        )
+      );
     }
 
-    const warehousesWithEnough: WarehouseWithCoords[] = [];
-    for (const [warehouseId, productQtys] of byWarehouse) {
-      const hasAll = items.every((item) => {
-        const qty = productQtys.get(item.productId) ?? 0;
-        return qty >= item.quantity;
-      });
-      if (hasAll) {
-        const coords = warehouseCoords.get(warehouseId);
-        if (coords) {
-          warehousesWithEnough.push({
-            id: warehouseId,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          });
-        }
-      }
-    }
-    return warehousesWithEnough;
+    const rows = await query.execute();
+
+    return rows.map((r) => ({
+      id: r.id,
+      latitude: r.latitude,
+      longitude: r.longitude,
+    }));
   }
 
   async createAddress(data: CreateAddressInput): Promise<{ id: string }> {
+    const id = crypto.randomUUID();
     const [row] = await this.db
       .insertInto('addresses')
       .values({
+        id,
         customerId: data.customerId,
         street: data.street,
         city: data.city,
@@ -129,9 +107,11 @@ export class OrderRepository {
     createdAt: Date;
     items: { id: string; productId: string; quantity: number; unitPrice: number }[];
   }> {
+    const orderId = crypto.randomUUID();
     const [order] = await this.db
       .insertInto('orders')
       .values({
+        id: orderId,
         customerId: input.customerId,
         warehouseId: input.warehouseId,
         shippingAddressId: input.shippingAddressId,
@@ -147,6 +127,7 @@ export class OrderRepository {
         .insertInto('order_items')
         .values(
           input.items.map((item) => ({
+            id: crypto.randomUUID(),
             orderId: order.id,
             productId: item.productId,
             quantity: item.quantity,
