@@ -73,6 +73,8 @@ export class OrderService {
       orderItems.push({ productId: item.productId, quantity: item.quantity, unitPrice: unitPriceCents });
     }
 
+    // This is a mock payment service. If the payment fails we throw an error, which rolls back all DB updates for this request via the transaction.
+    // In a real scenario, since we're inside a transaction and payment side effects can be asynchronous, the outbox pattern would be a better fit for handling payments.
     this.paymentService.charge(creditCardNumber, totalAmountCents);
 
     const address = await this.orderRepository.createAddress({

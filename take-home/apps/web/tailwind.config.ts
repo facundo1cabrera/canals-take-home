@@ -7,7 +7,17 @@ const config: Config = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        canals: {
+          sidebar: '#F5F5F7',
+          accent: '#6C5CE7',
+          'accent-light': '#E8E5F8',
+          'accent-lighter': '#F0F3FF',
+          'accent-dark': '#5B4CDB',
+        },
+      },
+    },
   },
   plugins: [],
 };

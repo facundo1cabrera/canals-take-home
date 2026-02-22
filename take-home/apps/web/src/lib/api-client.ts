@@ -11,7 +11,6 @@ export const apiClient = initQueryClient(contract, {
   },
   api: async (args) => {
     const url = `${args.path}`;
-    console.log('url', url);
     const response = await fetch(url, {
       method: args.method,
       headers: args.headers as Record<string, string>,

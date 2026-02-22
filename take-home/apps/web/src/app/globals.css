@@ -3,12 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --canals-sidebar: #F5F5F7;
+  --canals-accent: #6C5CE7;
+  --canals-accent-light: #E8E5F8;
+  --canals-accent-lighter: #F0F3FF;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: system-ui, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
