@@ -21,15 +21,18 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^5.19.0"
+    "@prisma/client": "^5.19.0",
+    "kysely": "^0.28.11",
+    "pg": "^8.18.0",
+    "prisma-kysely": "1.8.0"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@types/node": "^22.15.3",
+    "@types/pg": "^8.16.0",
     "eslint": "catalog:",
     "prisma": "^5.19.0",
     "tsx": "^4.19.0",
     "typescript": "catalog:"
   }
 }
-

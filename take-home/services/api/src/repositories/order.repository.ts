@@ -1,5 +1,6 @@
 import { injectable, inject } from 'tsyringe';
-import { PRISMA_TOKEN, type PrismaTransaction } from '../lib/prisma';
+import { sql } from '@repo/db';
+import { KYSELY_TOKEN, type KyselyDb } from '../lib/kysely';
 
 export interface ProductRecord {
   id: string;
@@ -34,31 +35,51 @@ export interface CreateOrderInput {
 
 @injectable()
 export class OrderRepository {
-  constructor(@inject(PRISMA_TOKEN) private prisma: PrismaTransaction) {}
+  constructor(@inject(KYSELY_TOKEN) private db: KyselyDb) {}
 
   async findProductsByIds(ids: string[]): Promise<ProductRecord[]> {
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, price: true },
-    });
-    return products.map((p: { id: string; price: number }) => ({ id: p.id, price: p.price }));
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('products')
+      .select(['id', 'price'])
+      .where('id', 'in', ids)
+      .execute();
+    return rows.map((p) => ({ id: p.id, price: p.price }));
   }
 
   async findWarehousesWithInventoryForItems(
     items: { productId: string; quantity: number }[]
   ): Promise<WarehouseWithCoords[]> {
-    const productIds = items.map((i) => i.productId);
-    const inventory = await this.prisma.inventory.findMany({
-      where: { productId: { in: productIds } },
-      include: { warehouse: true },
-    });
+    const productIds = [...new Set(items.map((i) => i.productId))];
+    if (productIds.length === 0) return [];
+
+    const inventory = await this.db
+      .selectFrom('inventory')
+      .innerJoin('warehouses', 'warehouses.id', 'inventory.warehouseId')
+      .select([
+        'inventory.warehouseId',
+        'inventory.productId',
+        'inventory.quantity',
+        'warehouses.id as warehouseId',
+        'warehouses.latitude',
+        'warehouses.longitude',
+      ])
+      .where('inventory.productId', 'in', productIds)
+      .execute();
+
     const byWarehouse = new Map<string, Map<string, number>>();
+    const warehouseCoords = new Map<string, { latitude: number; longitude: number }>();
     for (const inv of inventory) {
       if (!byWarehouse.has(inv.warehouseId)) {
         byWarehouse.set(inv.warehouseId, new Map());
+        warehouseCoords.set(inv.warehouseId, {
+          latitude: inv.latitude,
+          longitude: inv.longitude,
+        });
       }
       byWarehouse.get(inv.warehouseId)!.set(inv.productId, inv.quantity);
     }
+
     const warehousesWithEnough: WarehouseWithCoords[] = [];
     for (const [warehouseId, productQtys] of byWarehouse) {
       const hasAll = items.every((item) => {
@@ -66,12 +87,12 @@ export class OrderRepository {
         return qty >= item.quantity;
       });
       if (hasAll) {
-        const invRow = inventory.find((i: { warehouseId: string; warehouse: { id: string; latitude: number; longitude: number } }) => i.warehouseId === warehouseId);
-        if (invRow) {
+        const coords = warehouseCoords.get(warehouseId);
+        if (coords) {
           warehousesWithEnough.push({
-            id: invRow.warehouse.id,
-            latitude: invRow.warehouse.latitude,
-            longitude: invRow.warehouse.longitude,
+            id: warehouseId,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
           });
         }
       }
@@ -80,8 +101,9 @@ export class OrderRepository {
   }
 
   async createAddress(data: CreateAddressInput): Promise<{ id: string }> {
-    const address = await this.prisma.address.create({
-      data: {
+    const [row] = await this.db
+      .insertInto('addresses')
+      .values({
         customerId: data.customerId,
         street: data.street,
         city: data.city,
@@ -90,10 +112,11 @@ export class OrderRepository {
         postalCode: data.postalCode,
         latitude: data.latitude,
         longitude: data.longitude,
-      },
-      select: { id: true },
-    });
-    return address;
+      })
+      .returning('id')
+      .execute();
+    if (!row) throw new Error('Failed to create address');
+    return { id: row.id };
   }
 
   async createOrderWithItems(input: CreateOrderInput): Promise<{
@@ -106,24 +129,49 @@ export class OrderRepository {
     createdAt: Date;
     items: { id: string; productId: string; quantity: number; unitPrice: number }[];
   }> {
-    const order = await this.prisma.order.create({
-      data: {
+    const [order] = await this.db
+      .insertInto('orders')
+      .values({
         customerId: input.customerId,
         warehouseId: input.warehouseId,
         shippingAddressId: input.shippingAddressId,
         totalAmount: input.totalAmount,
         status: input.status,
-        items: {
-          create: input.items.map((item) => ({
+      })
+      .returningAll()
+      .execute();
+    if (!order) throw new Error('Failed to create order');
+
+    if (input.items.length > 0) {
+      await this.db
+        .insertInto('order_items')
+        .values(
+          input.items.map((item) => ({
+            orderId: order.id,
             productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-          })),
-        },
-      },
-      include: { items: true },
-    });
-    return order;
+          }))
+        )
+        .execute();
+    }
+
+    const orderItems = await this.db
+      .selectFrom('order_items')
+      .select(['id', 'productId', 'quantity', 'unitPrice'])
+      .where('orderId', '=', order.id)
+      .execute();
+
+    return {
+      id: order.id,
+      customerId: order.customerId,
+      warehouseId: order.warehouseId,
+      shippingAddressId: order.shippingAddressId,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      createdAt: order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt),
+      items: orderItems,
+    };
   }
 
   async decrementInventory(
@@ -131,15 +179,12 @@ export class OrderRepository {
     items: { productId: string; quantity: number }[]
   ): Promise<void> {
     for (const item of items) {
-      await this.prisma.inventory.updateMany({
-        where: {
-          warehouseId,
-          productId: item.productId,
-        },
-        data: {
-          quantity: { decrement: item.quantity },
-        },
-      });
+      await this.db
+        .updateTable('inventory')
+        .set({ quantity: sql`quantity - ${item.quantity}` })
+        .where('warehouseId', '=', warehouseId)
+        .where('productId', '=', item.productId)
+        .execute();
     }
   }
 
@@ -155,10 +200,42 @@ export class OrderRepository {
       items: { id: string; productId: string; quantity: number; unitPrice: number }[];
     }[]
   > {
-    const orders = await this.prisma.order.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { items: true },
-    });
-    return orders;
+    const orders = await this.db
+      .selectFrom('orders')
+      .selectAll()
+      .orderBy('createdAt', 'desc')
+      .execute();
+
+    if (orders.length === 0) return [];
+
+    const orderIds = orders.map((o) => o.id);
+    const orderItems = await this.db
+      .selectFrom('order_items')
+      .select(['id', 'orderId', 'productId', 'quantity', 'unitPrice'])
+      .where('orderId', 'in', orderIds)
+      .execute();
+
+    const itemsByOrderId = new Map<string, { id: string; productId: string; quantity: number; unitPrice: number }[]>();
+    for (const i of orderItems) {
+      const list = itemsByOrderId.get(i.orderId) ?? [];
+      list.push({
+        id: i.id,
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      });
+      itemsByOrderId.set(i.orderId, list);
+    }
+
+    return orders.map((order) => ({
+      id: order.id,
+      customerId: order.customerId,
+      warehouseId: order.warehouseId,
+      shippingAddressId: order.shippingAddressId,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      createdAt: order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt),
+      items: itemsByOrderId.get(order.id) ?? [],
+    }));
   }
 }

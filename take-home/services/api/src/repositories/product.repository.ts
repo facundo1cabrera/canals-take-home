@@ -1,5 +1,5 @@
 import { injectable, inject } from 'tsyringe';
-import { PRISMA_TOKEN, type PrismaTransaction } from '../lib/prisma';
+import { KYSELY_TOKEN, type KyselyDb } from '../lib/kysely';
 
 export interface ProductRecord {
   id: string;
@@ -9,11 +9,12 @@ export interface ProductRecord {
 
 @injectable()
 export class ProductRepository {
-  constructor(@inject(PRISMA_TOKEN) private prisma: PrismaTransaction) {}
+  constructor(@inject(KYSELY_TOKEN) private db: KyselyDb) {}
 
   async findMany(): Promise<ProductRecord[]> {
-    return this.prisma.product.findMany({
-      select: { id: true, name: true, price: true },
-    });
+    return this.db
+      .selectFrom('products')
+      .select(['id', 'name', 'price'])
+      .execute();
   }
 }

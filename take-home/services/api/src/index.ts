@@ -5,17 +5,17 @@ import cors from '@fastify/cors';
 import type { ServerInferRequest, ServerInferResponses } from '@ts-rest/core';
 import { initServer } from '@ts-rest/fastify';
 import { contract } from '@repo/contracts';
-import { prisma } from '@repo/db';
+import { kysely } from '@repo/db';
 import { env } from './env';
 import { container } from './container';
 import { OrderController } from './controllers/order.controller';
 import { CustomerService } from './services/customer.service';
 import { ProductService } from './services/product.service';
-import { PRISMA_TOKEN } from './lib/prisma';
+import { KYSELY_TOKEN } from './lib/kysely';
 import { registerErrorHandler } from './lib/error-handler';
 import { registerRequestLogger } from './lib/request-logger';
 
-container.register(PRISMA_TOKEN, { useValue: prisma });
+container.register(KYSELY_TOKEN, { useValue: kysely });
 
 const app = Fastify({
   logger: {
@@ -44,17 +44,17 @@ registerRequestLogger(app);
 registerErrorHandler(app);
 
 /**
- * Wraps a handler in a Prisma transaction. The handler receives the request and a
- * request-scoped container where PRISMA_TOKEN is bound to the transaction client,
+ * Wraps a handler in a Kysely transaction. The handler receives the request and a
+ * request-scoped container where KYSELY_TOKEN is bound to the transaction client,
  * so all resolved services/repositories share the same transaction.
  */
 function withTransaction<TReq, TRes>(
   handler: (req: TReq, requestContainer: DependencyContainer) => Promise<TRes>
 ) {
   return async (req: TReq): Promise<TRes> => {
-    return prisma.$transaction(async (tx: unknown) => {
+    return kysely.transaction().execute(async (trx) => {
       const requestContainer = container.createChildContainer();
-      requestContainer.register(PRISMA_TOKEN, { useValue: tx });
+      requestContainer.register(KYSELY_TOKEN, { useValue: trx });
       return handler(req, requestContainer);
     });
   };

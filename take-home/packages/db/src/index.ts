@@ -13,4 +13,6 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 export * from '@prisma/client';
+export { kysely, sql, type KyselyDb } from './kysely';
+export type { DB, OrderStatus } from './generated/kysely-types';
 
