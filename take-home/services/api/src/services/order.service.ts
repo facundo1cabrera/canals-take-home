@@ -1,5 +1,5 @@
 import { injectable, inject } from 'tsyringe';
-import { CreateOrderBodySchema, type CreateOrderResponse } from '@repo/contracts';
+import type { CreateOrderBody, CreateOrderResponse } from '@repo/contracts';
 import { OrderRepository } from '../repositories/order.repository';
 import { GeocodingService } from './geocoding.service';
 import { PaymentService } from './payment.service';
@@ -34,6 +34,7 @@ export class OrderService {
 
   async getOrders(): Promise<CreateOrderResponse[]> {
     const orders = await this.orderRepository.findManyOrdersWithItems();
+
     return orders.map((order) => ({
       id: order.id,
       customerId: order.customerId,
@@ -51,13 +52,8 @@ export class OrderService {
     }));
   }
 
-  createOrder(body: unknown): Promise<CreateOrderResponse> {
-    const parsed = CreateOrderBodySchema.safeParse(body);
-    if (!parsed.success) {
-      throw parsed.error;
-    }
-    const { customerId, shippingAddress, items, creditCardNumber } = parsed.data;
-
+  createOrder(body: CreateOrderBody): Promise<CreateOrderResponse> {
+    const { customerId, shippingAddress, items, creditCardNumber } = body;
     return this.runCreateOrder(customerId, shippingAddress, items, creditCardNumber);
   }
 
@@ -92,6 +88,7 @@ export class OrderService {
         w.latitude,
         w.longitude
       );
+      
       if (dist < minDist) {
         minDist = dist;
         closest = w;

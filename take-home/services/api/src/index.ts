@@ -1,6 +1,8 @@
 import 'reflect-metadata';
+import type { DependencyContainer } from 'tsyringe';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import type { ServerInferRequest, ServerInferResponses } from '@ts-rest/core';
 import { initServer } from '@ts-rest/fastify';
 import { contract } from '@repo/contracts';
 import { prisma } from '@repo/db';
@@ -19,12 +21,12 @@ const app = Fastify({
     transport:
       env.NODE_ENV === 'development'
         ? {
-            target: 'pino-pretty',
-            options: {
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname',
-            },
-          }
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        }
         : undefined,
   },
   requestIdHeader: 'x-request-id',
@@ -39,43 +41,55 @@ await app.register(cors, { origin: true });
 registerRequestLogger(app);
 registerErrorHandler(app);
 
-function withOrderTransaction(
-  ControllerClass: typeof OrderController,
-  handler: (controller: OrderController) => (body: unknown) => Promise<{ status: number; body: unknown }>
+/**
+ * Wraps a handler in a Prisma transaction. The handler receives the request and a
+ * request-scoped container where PRISMA_TOKEN is bound to the transaction client,
+ * so all resolved services/repositories share the same transaction.
+ */
+function withTransaction<TReq, TRes>(
+  handler: (req: TReq, requestContainer: DependencyContainer) => Promise<TRes>
 ) {
-  return async (input: unknown) => {
-    const request = input as { body?: unknown };
-    return await prisma.$transaction(async (tx: unknown) => {
+  return async (req: TReq): Promise<TRes> => {
+    return prisma.$transaction(async (tx: unknown) => {
       const requestContainer = container.createChildContainer();
       requestContainer.register(PRISMA_TOKEN, { useValue: tx });
-      const controller = requestContainer.resolve(ControllerClass) as OrderController;
-      return handler(controller)(request.body ?? {});
+      return handler(req, requestContainer);
     });
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const router = s.router(contract, {
-  getCustomers: async () => {
-    const customers = await prisma.customer.findMany({
+  getCustomers: withTransaction(async (_req, requestContainer) => {
+    const db = requestContainer.resolve<typeof prisma>(PRISMA_TOKEN);
+    const customers = await db.customer.findMany({
       select: { id: true, name: true, email: true },
     });
     return { status: 200, body: customers };
-  },
-  getProducts: async () => {
-    const products = await prisma.product.findMany({
+  }),
+
+  getProducts: withTransaction(async (_req, requestContainer) => {
+    const db = requestContainer.resolve<typeof prisma>(PRISMA_TOKEN);
+    const products = await db.product.findMany({
       select: { id: true, name: true, price: true },
     });
     return {
       status: 200,
       body: products.map((p) => ({ id: p.id, name: p.name, price: (p.price / 100).toFixed(2) })),
     };
-  },
-  getOrders: async () => {
-    const controller = container.resolve(OrderController);
+  }),
+
+  getOrders: withTransaction(async (_req, requestContainer) => {
+    const controller = requestContainer.resolve(OrderController);
     return controller.getOrders();
-  },
-  createOrder: withOrderTransaction(OrderController, (c) => c.createOrder) as any,
+  }),
+
+  createOrder: withTransaction<
+    ServerInferRequest<typeof contract.createOrder>,
+    ServerInferResponses<typeof contract.createOrder>
+  >(async (req, requestContainer) => {
+    const controller = requestContainer.resolve(OrderController);
+    return controller.createOrder(req.body);
+  }),
 });
 
 const start = async () => {

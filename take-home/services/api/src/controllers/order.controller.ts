@@ -1,10 +1,11 @@
 import { injectable, inject } from 'tsyringe';
 import { OrderService } from '../services/order.service';
-import type { ServerInferResponses } from '@ts-rest/core';
+import type { ServerInferRequest, ServerInferResponses } from '@ts-rest/core';
 import { contract } from '@repo/contracts';
 
 type GetOrdersResponse = ServerInferResponses<typeof contract.getOrders>;
 type CreateOrderResponse = ServerInferResponses<typeof contract.createOrder>;
+type CreateOrderBody = ServerInferRequest<typeof contract.createOrder>['body'];
 
 @injectable()
 export class OrderController {
@@ -15,7 +16,7 @@ export class OrderController {
     return { status: 200, body: orders };
   };
 
-  createOrder = async (body: unknown): Promise<CreateOrderResponse> => {
+  createOrder = async (body: CreateOrderBody): Promise<CreateOrderResponse> => {
     const order = await this.orderService.createOrder(body);
     return { status: 201, body: order };
   };

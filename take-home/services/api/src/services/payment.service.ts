@@ -1,9 +1,7 @@
 import { injectable } from 'tsyringe';
 import { PaymentFailedError } from '../lib/errors';
 
-/**
- * Mock payment: card number ending in even digit → success, odd → fail.
- */
+
 @injectable()
 export class PaymentService {
   charge(creditCardNumber: string, _amountCents: number): void {
