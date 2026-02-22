@@ -1,135 +1,49 @@
-# Turborepo starter
+# Canals — Order Management API
 
-This Turborepo starter is maintained by the Turborepo core team.
+A customer places an order with a shipping address and a list of products. The system geocodes the address, finds the nearest warehouse that has every requested item in stock (using PostGIS spatial queries), charges the customer's credit card, creates the order, and decrements inventory — all inside a single database transaction.
 
-## Using this example
+## Running the project
 
-Run the following command:
+Requires **Node.js >= 18**, **pnpm >= 9** (`corepack enable`), and **Docker**.
 
-```sh
-npx create-turbo@latest
+```bash
+pnpm install
+pnpm start
 ```
 
-## What's inside?
+`pnpm start` handles everything: starts a PostgreSQL + PostGIS container, runs migrations, seeds sample data (customers, products, warehouses with inventory), and launches both servers.
 
-This Turborepo includes the following packages/apps:
+- **API** → http://localhost:3001
+- **Web UI** → http://localhost:3000
 
-### Apps and Packages
+## Using the frontend
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+Open http://localhost:3000. The **Orders** page lets you create orders through a form — select a customer, fill in a shipping address, pick products and quantities, and enter a credit card number. Created orders appear in the table above the form.
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+The **Inventory** page shows each warehouse's current stock. You can use it to verify that inventory decreases after placing an order.
 
-### Utilities
+**Mock payment rule:** credit card numbers ending in an **even digit succeed**, odd digits are **declined**. Use `4242424242424242` for success and `4242424242424243` for failure.
 
-This Turborepo has some additional tools already setup for you:
+## Running tests
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```bash
+pnpm test
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+Integration tests run against `pg-mem` (an in-memory PostgreSQL emulator) so no running database is required. They cover order creation, error cases, inventory decrement, and response formatting. The PostGIS-dependent warehouse distance query is stubbed in tests since `pg-mem` doesn't support spatial extensions — that logic is validated against the real database during development.
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+## Technical decisions
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+**PostgreSQL + PostGIS** — Warehouse selection is a spatial problem: find the closest warehouse that stocks every item. Instead of fetching all warehouses and computing distances in Node, a single SQL query uses `ST_DISTANCE` on geography types (geodesic distance in meters), filters by inventory with `EXISTS` subqueries, and returns the nearest match. This scales well and pushes the work where it belongs.
 
-### Develop
+**Request-scoped transactions** — Every request runs inside a Kysely transaction. A child TSyringe container is created per request with the transaction bound as the DB connection, so all services and repositories resolved in that request share it. If the payment mock throws, the order, address, and inventory changes roll back automatically.
 
-To develop all apps and packages, run the following command:
+**Prisma + Kysely** — Prisma manages the schema and migrations; Kysely handles runtime queries. Kysely's composable query builder supports raw SQL fragments (necessary for PostGIS), proper transaction handling, and type-safe dynamic `WHERE` clauses — things Prisma's query API doesn't handle well. The `prisma-kysely` generator bridges both: one schema, two tools for their strengths.
 
-```
-cd my-turborepo
+**TSyringe (dependency injection)** — Constructor injection makes services testable: in tests, the real DB is swapped for `pg-mem` and specific methods (like the PostGIS query) can be spied on without changing production code.
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+**Mock services** — Geocoding is a deterministic hash of the postal code (same code → same coordinates). Payment checks the credit card's last digit (even → success, odd → decline). Both are injectable services designed to be swapped for real implementations. In production, the payment would use the **outbox pattern** — writing a payment intent to a table and processing it asynchronously — since external side effects shouldn't live inside a DB transaction.
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+**ts-rest contracts** — The API contract is defined once in `packages/contracts` with Zod schemas and shared between backend (Fastify) and frontend (Next.js). Request/response types are enforced at compile time end-to-end.
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+**Money as integers** — All prices are stored in cents to avoid floating-point errors. Conversion to dollar strings happens at the API boundary.
