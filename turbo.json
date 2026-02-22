@@ -64,6 +64,10 @@
     "db:generate": {
       "cache": false
     },
+    "test": {
+      "dependsOn": ["^db:generate"],
+      "cache": false
+    },
     "db:migrate-deployed": {
       "cache": false,
       "dependsOn": ["^db:generate", "@types#build"],
