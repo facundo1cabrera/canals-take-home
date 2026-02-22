@@ -1,9 +1,13 @@
 import { injectable, inject } from 'tsyringe';
-import type { CreateOrderBody, CreateOrderResponse } from '@repo/contracts';
+import type { contract, CreateOrderBody, CreateOrderResponse } from '@repo/contracts';
 import { OrderRepository } from '../repositories/order.repository';
 import { GeocodingService } from './geocoding.service';
 import { PaymentService } from './payment.service';
 import { BadRequestError, NotFoundError } from '../lib/errors';
+import { ServerInferResponses } from '@ts-rest/core';
+
+type GetOrdersResponse = ServerInferResponses<typeof contract.getOrders>;
+type GetOrdersResponseBody = Extract<GetOrdersResponse, { status: 200 }>['body'];
 
 function haversineDistance(
   lat1: number,
@@ -32,7 +36,7 @@ export class OrderService {
     @inject(PaymentService) private paymentService: PaymentService
   ) {}
 
-  async getOrders(): Promise<CreateOrderResponse[]> {
+  async getOrders(): Promise<GetOrdersResponseBody> {
     const orders = await this.orderRepository.findManyOrdersWithItems();
 
     return orders.map((order) => ({
@@ -41,7 +45,7 @@ export class OrderService {
       warehouseId: order.warehouseId,
       shippingAddressId: order.shippingAddressId,
       totalAmount: (order.totalAmount / 100).toFixed(2),
-      status: order.status as CreateOrderResponse['status'],
+      status: order.status as GetOrdersResponseBody[number]['status'],
       createdAt: order.createdAt.toISOString(),
       items: order.items.map((i) => ({
         id: i.id,
@@ -52,19 +56,12 @@ export class OrderService {
     }));
   }
 
-  createOrder(body: CreateOrderBody): Promise<CreateOrderResponse> {
+  async createOrder(body: CreateOrderBody): Promise<CreateOrderResponse> {
     const { customerId, shippingAddress, items, creditCardNumber } = body;
-    return this.runCreateOrder(customerId, shippingAddress, items, creditCardNumber);
-  }
 
-  private async runCreateOrder(
-    customerId: string,
-    shippingAddress: { street: string; city: string; state: string; country: string; postalCode: string },
-    items: { productId: string; quantity: number }[],
-    creditCardNumber: string
-  ): Promise<CreateOrderResponse> {
     const productIds = [...new Set(items.map((i) => i.productId))];
     const products = await this.orderRepository.findProductsByIds(productIds);
+    
     if (products.length !== productIds.length) {
       const foundIds = new Set(products.map((p) => p.id));
       const missing = productIds.filter((id) => !foundIds.has(id));
@@ -72,7 +69,9 @@ export class OrderService {
     }
 
     const productMap = new Map(products.map((p) => [p.id, p]));
+
     const warehouses = await this.orderRepository.findWarehousesWithInventoryForItems(items);
+
     if (warehouses.length === 0) {
       throw new BadRequestError('No warehouse has sufficient inventory for all items');
     }
@@ -80,6 +79,7 @@ export class OrderService {
     const { latitude, longitude } = this.geocodingService.geocode(shippingAddress.postalCode);
 
     let closest = warehouses[0]!;
+
     let minDist = Infinity;
     for (const w of warehouses) {
       const dist = haversineDistance(
@@ -88,7 +88,7 @@ export class OrderService {
         w.latitude,
         w.longitude
       );
-      
+
       if (dist < minDist) {
         minDist = dist;
         closest = w;
@@ -96,7 +96,9 @@ export class OrderService {
     }
 
     let totalAmountCents = 0;
+
     const orderItems: { productId: string; quantity: number; unitPrice: number }[] = [];
+    
     for (const item of items) {
       const product = productMap.get(item.productId)!;
       const unitPriceCents = product.price;

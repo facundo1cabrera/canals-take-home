@@ -9,6 +9,8 @@ import { prisma } from '@repo/db';
 import { env } from './env';
 import { container } from './container';
 import { OrderController } from './controllers/order.controller';
+import { CustomerService } from './services/customer.service';
+import { ProductService } from './services/product.service';
 import { PRISMA_TOKEN } from './lib/prisma';
 import { registerErrorHandler } from './lib/error-handler';
 import { registerRequestLogger } from './lib/request-logger';
@@ -60,22 +62,15 @@ function withTransaction<TReq, TRes>(
 
 const router = s.router(contract, {
   getCustomers: withTransaction(async (_req, requestContainer) => {
-    const db = requestContainer.resolve<typeof prisma>(PRISMA_TOKEN);
-    const customers = await db.customer.findMany({
-      select: { id: true, name: true, email: true },
-    });
+    const customerService = requestContainer.resolve(CustomerService);
+    const customers = await customerService.getCustomers();
     return { status: 200, body: customers };
   }),
 
   getProducts: withTransaction(async (_req, requestContainer) => {
-    const db = requestContainer.resolve<typeof prisma>(PRISMA_TOKEN);
-    const products = await db.product.findMany({
-      select: { id: true, name: true, price: true },
-    });
-    return {
-      status: 200,
-      body: products.map((p) => ({ id: p.id, name: p.name, price: (p.price / 100).toFixed(2) })),
-    };
+    const productService = requestContainer.resolve(ProductService);
+    const products = await productService.getProducts();
+    return { status: 200, body: products };
   }),
 
   getOrders: withTransaction(async (_req, requestContainer) => {
@@ -83,10 +78,7 @@ const router = s.router(contract, {
     return controller.getOrders();
   }),
 
-  createOrder: withTransaction<
-    ServerInferRequest<typeof contract.createOrder>,
-    ServerInferResponses<typeof contract.createOrder>
-  >(async (req, requestContainer) => {
+  createOrder: withTransaction<ServerInferRequest<typeof contract.createOrder>,ServerInferResponses<typeof contract.createOrder>>(async (req, requestContainer) => {
     const controller = requestContainer.resolve(OrderController);
     return controller.createOrder(req.body);
   }),
