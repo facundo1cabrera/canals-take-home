@@ -44,17 +44,26 @@ export class OrderRepository {
       .select(['id', 'price'])
       .where('id', 'in', ids)
       .execute();
-    return rows.map((p) => ({ id: p.id, price: p.price }));
+    return rows;
   }
 
-  async findWarehousesWithInventoryForItems(
-    items: { productId: string; quantity: number }[]
-  ): Promise<WarehouseWithCoords[]> {
-    if (items.length === 0) return [];
+  async findNearestWarehouseWithInventoryForItems(
+    items: { productId: string; quantity: number }[],
+    coords: { latitude: number; longitude: number }
+  ): Promise<WarehouseWithCoords | null> {
+    if (items.length === 0) return null;
 
     let query = this.db
       .selectFrom('warehouses')
-      .select(['warehouses.id', 'warehouses.latitude', 'warehouses.longitude']);
+      .select([
+        'warehouses.id',
+        'warehouses.latitude',
+        'warehouses.longitude',
+        sql<number>`ST_DISTANCE(
+          ST_SetSRID(ST_MakePoint(${coords.longitude}, ${coords.latitude}), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(warehouses.longitude, warehouses.latitude), 4326)::geography
+        )`.as('distance'),
+      ]);
 
     for (const item of items) {
       query = query.where(({ exists, selectFrom }) =>
@@ -67,13 +76,14 @@ export class OrderRepository {
       );
     }
 
-    const rows = await query.execute();
+    const [row] = await query.orderBy('distance', 'asc').limit(1).execute();
 
-    return rows.map((r) => ({
-      id: r.id,
-      latitude: r.latitude,
-      longitude: r.longitude,
-    }));
+    if (!row) return null;
+    return {
+      id: row.id,
+      latitude: row.latitude,
+      longitude: row.longitude,
+    };
   }
 
   async createAddress(data: CreateAddressInput): Promise<{ id: string }> {

@@ -9,25 +9,6 @@ import { ServerInferResponses } from '@ts-rest/core';
 type GetOrdersResponse = ServerInferResponses<typeof contract.getOrders>;
 type GetOrdersResponseBody = Extract<GetOrdersResponse, { status: 200 }>['body'];
 
-function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 @injectable()
 export class OrderService {
   constructor(
@@ -70,31 +51,15 @@ export class OrderService {
 
     const productMap = new Map(products.map((p) => [p.id, p]));
 
-    const warehouses = await this.orderRepository.findWarehousesWithInventoryForItems(items);
-
-    console.log('warehouses', warehouses);
-
-    if (warehouses.length === 0) {
-      throw new BadRequestError('No warehouse has sufficient inventory for all items');
-    }
-
     const { latitude, longitude } = this.geocodingService.geocode(shippingAddress.postalCode);
 
-    let closest = warehouses[0]!;
+    const closest = await this.orderRepository.findNearestWarehouseWithInventoryForItems(items, {
+      latitude,
+      longitude,
+    });
 
-    let minDist = Infinity;
-    for (const w of warehouses) {
-      const dist = haversineDistance(
-        latitude,
-        longitude,
-        w.latitude,
-        w.longitude
-      );
-
-      if (dist < minDist) {
-        minDist = dist;
-        closest = w;
-      }
+    if (!closest) {
+      throw new BadRequestError('No warehouse has sufficient inventory for all items');
     }
 
     let totalAmountCents = 0;
