@@ -44,6 +44,21 @@ export const CreateOrderResponseSchema = z.object({
 const CustomerOptionSchema = z.object({ id: z.string(), name: z.string(), email: z.string() });
 const ProductOptionSchema = z.object({ id: z.string(), name: z.string(), price: z.string() });
 
+const WarehouseInventoryItemSchema = z.object({
+  productId: z.string(),
+  productName: z.string(),
+  productPrice: z.string(),
+  quantity: z.number(),
+});
+
+const WarehouseWithInventorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  inventory: z.array(WarehouseInventoryItemSchema),
+});
+
 export const contract = c.router({
   getCustomers: {
     method: 'GET',
@@ -64,6 +79,14 @@ export const contract = c.router({
       200: z.array(CreateOrderResponseSchema),
     },
     summary: 'List all orders',
+  },
+  getWarehouses: {
+    method: 'GET',
+    path: '/warehouses',
+    responses: {
+      200: z.array(WarehouseWithInventorySchema),
+    },
+    summary: 'List warehouses with inventory',
   },
   createOrder: {
     method: 'POST',

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Providers } from './providers';
+import { NavLinks } from './nav-links';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -25,12 +26,7 @@ export default function RootLayout({
               </div>
               <span className="font-semibold text-gray-800">canals</span>
             </div>
-            <nav className="mt-2 px-2 space-y-0.5">
-              <a href="/" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-canals-accent-lighter text-canals-accent font-medium">
-                <span className="text-gray-600">📋</span>
-                Orders
-              </a>
-            </nav>
+            <NavLinks />
           </aside>
           <div className="flex-1 flex flex-col min-w-0 bg-white">
             {children}

@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { env } from './env';
 import type { DependencyContainer } from 'tsyringe';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -6,9 +7,9 @@ import type { ServerInferRequest, ServerInferResponses } from '@ts-rest/core';
 import { initServer } from '@ts-rest/fastify';
 import { contract } from '@repo/contracts';
 import { kysely } from '@repo/db';
-import { env } from './env';
 import { container } from './container';
 import { OrderController } from './controllers/order.controller';
+import { WarehouseController } from './controllers/warehouse.controller';
 import { CustomerService } from './services/customer.service';
 import { ProductService } from './services/product.service';
 import { KYSELY_TOKEN } from './lib/kysely';
@@ -71,6 +72,11 @@ const router = s.router(contract, {
     const productService = requestContainer.resolve(ProductService);
     const products = await productService.getProducts();
     return { status: 200, body: products };
+  }),
+
+  getWarehouses: withTransaction(async (_req, requestContainer) => {
+    const controller = requestContainer.resolve(WarehouseController);
+    return controller.getWarehouses();
   }),
 
   getOrders: withTransaction(async (_req, requestContainer) => {
