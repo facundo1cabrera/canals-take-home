@@ -2,6 +2,15 @@
 
 A customer places an order with a shipping address and a list of products. The system geocodes the address, finds the nearest warehouse that has every requested item in stock (using PostGIS spatial queries), charges the customer's credit card, creates the order, and decrements inventory — all inside a single database transaction.
 
+## Using the frontend
+
+You can access the deployed app at **https://canals-take-home-web.vercel.app**, or run it locally and open http://localhost:3000. The **Orders** page lets you create orders through a form — select a customer, fill in a shipping address, pick products and quantities, and enter a credit card number. Created orders appear in the table above the form.
+
+The **Inventory** page shows each warehouse's current stock. You can use it to verify that inventory decreases after placing an order.
+
+**Mock payment rule:** credit card numbers ending in an **even digit succeed**, odd digits are **declined**. Use `4242424242424242` for success and `4242424242424243` for failure.
+
+
 ## Running the project
 
 Requires **Node.js >= 18**, **pnpm >= 9** (`corepack enable`), and **Docker**.
@@ -11,18 +20,13 @@ pnpm install
 pnpm start
 ```
 
+Rename every `.env.example` file to `.env`.
+
 `pnpm start` handles everything: starts a PostgreSQL + PostGIS container, runs migrations, seeds sample data (customers, products, warehouses with inventory), and launches both servers.
 
 - **API** → http://localhost:3001
 - **Web UI** → http://localhost:3000
 
-## Using the frontend
-
-Open http://localhost:3000. The **Orders** page lets you create orders through a form — select a customer, fill in a shipping address, pick products and quantities, and enter a credit card number. Created orders appear in the table above the form.
-
-The **Inventory** page shows each warehouse's current stock. You can use it to verify that inventory decreases after placing an order.
-
-**Mock payment rule:** credit card numbers ending in an **even digit succeed**, odd digits are **declined**. Use `4242424242424242` for success and `4242424242424243` for failure.
 
 ## Running tests
 
