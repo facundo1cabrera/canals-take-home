@@ -2,6 +2,8 @@
 
 A customer places an order with a shipping address and a list of products. The system geocodes the address, finds the nearest warehouse that has every requested item in stock (using PostGIS spatial queries), charges the customer's credit card, creates the order, and decrements inventory — all inside a single database transaction.
 
+**Prefer to see a demo?** You can watch [a video of me presenting the challenge and explaining technical decisions](https://www.loom.com/share/d4647443cb884521829746ea2fe78651).
+
 ## Using the frontend
 
 You can access the deployed app at **https://canals-take-home-web.vercel.app**, or run it locally and open http://localhost:3000. The **Orders** page lets you create orders through a form — select a customer, fill in a shipping address, pick products and quantities, and enter a credit card number. Created orders appear in the table above the form.
