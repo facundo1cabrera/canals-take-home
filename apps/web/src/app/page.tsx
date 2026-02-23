@@ -120,6 +120,7 @@ export default function HomePage() {
                     <tr className="border-b border-gray-200 bg-gray-50/80 text-gray-600">
                       <th className="py-3 px-4 font-medium">ID</th>
                       <th className="py-3 px-4 font-medium">Customer</th>
+                      <th className="py-3 px-4 font-medium">Warehouse</th>
                       <th className="py-3 px-4 font-medium">Total</th>
                       <th className="py-3 px-4 font-medium">Status</th>
                       <th className="py-3 px-4 font-medium">Created</th>
@@ -132,6 +133,9 @@ export default function HomePage() {
                           {order.id.slice(0, 8)}…
                         </td>
                         <td className="py-3 px-4 text-gray-700">{order.customerId.slice(0, 8)}…</td>
+                        <td className="py-3 px-4 font-mono text-xs text-gray-600">
+                          {order.warehouseId.slice(0, 8)}…
+                        </td>
                         <td className="py-3 px-4 font-medium text-gray-800">
                           ${order.totalAmount}
                         </td>

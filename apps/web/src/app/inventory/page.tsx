@@ -62,6 +62,7 @@ export default function InventoryPage() {
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50/80 text-gray-600">
                       <th className="py-3 px-4 font-medium w-10"></th>
+                      <th className="py-3 px-4 font-medium">ID</th>
                       <th className="py-3 px-4 font-medium">Name</th>
                       <th className="py-3 px-4 font-medium">Latitude</th>
                       <th className="py-3 px-4 font-medium">Longitude</th>
@@ -133,6 +134,9 @@ function WarehouseRow({
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </td>
+        <td className="py-3 px-4 font-mono text-xs text-gray-600">
+          {warehouse.id.slice(0, 8)}…
+        </td>
         <td className="py-3 px-4 font-medium text-gray-800">{warehouse.name}</td>
         <td className="py-3 px-4 text-gray-600">{warehouse.latitude.toFixed(4)}</td>
         <td className="py-3 px-4 text-gray-600">{warehouse.longitude.toFixed(4)}</td>
@@ -140,7 +144,7 @@ function WarehouseRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={5} className="p-0">
+          <td colSpan={6} className="p-0">
             <div className="bg-gray-50/60 border-b border-gray-100">
               {warehouse.inventory.length === 0 ? (
                 <p className="px-8 py-4 text-sm text-gray-500">
