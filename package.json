@@ -18,7 +18,7 @@
     "docker:build:tag": "docker buildx build --platform linux/amd64,linux/arm64 -f services/api/Dockerfile -t canals-take-home-api:${TAG:-latest} .",
     "docker:build:push": "docker buildx build --platform linux/amd64,linux/arm64 -f services/api/Dockerfile -t canals-take-home-api:${TAG:-latest} --push .",
     "docker:push": "docker push canals-take-home-api:${TAG:-latest}",
-    "start": "docker compose up -d --wait && cp .env packages/db/.env && pnpm db:generate && pnpm db:push && pnpm db:seed && pnpm dev"
+    "start": "docker compose up -d --wait && cp .env packages/db/.env && pnpm db:migrate && pnpm db:generate && pnpm db:push && pnpm db:seed && pnpm dev"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
